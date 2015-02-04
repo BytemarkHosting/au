@@ -1,0 +1,223 @@
+#!/usr/bin/env ruby
+
+
+CLI.build( ARGV ).run
+
+BEGIN {
+  require 'erb'
+  require 'date'
+  require 'optparse'
+
+  # Encapsulates a single entry in the changelog. An entry is all
+  # commits between this tag and the last one.
+  class ChangelogEntry
+    attr_accessor :email
+    attr_accessor :author_name
+    attr_accessor :date
+    def initialize(projname, tag)
+      @projname = projname
+      @tag = tag
+      @lines = []
+    end
+
+    def close( stream )
+      stream.write self.to_s
+    end
+
+    def <<( msg )
+      @lines << msg
+    end
+
+    def to_s
+      template = <<-TEMPLATE
+<%= @projname %> (<%= @tag %>) stable; urgency=low
+
+<% for line in @lines -%>
+  * <%= line.split("\n").first.strip %>
+<% end -%>
+
+ -- <%= @author_name %> <<%= @email %>>  <%= render_date %>
+
+    TEMPLATE
+
+      ERB.new(template, nil, "-").result(binding)
+    end
+
+    def render_date
+      DateTime.parse(@date).rfc2822
+    end
+
+  end
+
+
+  class Parser
+
+    def initialize( projname )
+      @projname = projname
+      @tag = ""
+      @entries = []
+      @current_entry = nil
+    end
+
+
+    # Just read it all in and split it for now. No sense building a
+    # state machine until we need it
+    def parse(log)
+      entry_chunks = log.split /^commit/
+      # parse_chunk will skip any log entry more recent than the last
+      # tag.
+      entry_chunks.each do |chunk|
+        next if chunk.strip.empty?
+        parse_chunk chunk
+      end
+      @entries
+    end
+
+
+    private
+
+    def fresh_entry( projname, header )
+      entry = ChangelogEntry.new projname, header[:tag]
+      entry.email = header[:email]
+      entry.author_name = header[:author_name]
+      entry.date = header[:date]
+      entry
+    end
+
+
+    def current_entry( header )
+      if header[:tag]
+        new_entry = fresh_entry @projname, header
+        @entries << new_entry
+        @current_entry = new_entry
+      else
+        @current_entry
+      end
+    end
+
+
+    def parse_chunk( chunk )
+      header_s, title_s, _comment_s = chunk.split(/\n\s*\n/, 3)
+      header = parse_header header_s
+      title = dedent title_s
+
+      if entry = current_entry( header )
+        entry << title if title !~ /Added tag.*for changeset/
+      end
+    end
+
+
+    def dedent( text )
+      text.gsub /^\s+/, ""
+    end
+
+
+    def parse_header( header_s )
+      header = {}
+      lines = header_s.split(/\n/).compact.map{|s| s.strip}
+
+      commit_line = lines.shift
+      header[:hash], header[:tag] = parse_commit_line commit_line
+
+      lines.each do |line|
+        next if line.empty?
+        name, value = line.split(/:\s+/,2)
+        case name
+        when "Commit"
+          header[:author_name], header[:email] = parse_author value
+        when "CommitDate"
+          header[:date] = value
+        end
+      end
+
+      header
+    end
+
+
+    def parse_author( commit_s )
+      commit_s.match(/^(.+)<(.+?)>$/)[1..2].map{|s| s.strip}
+    end
+
+
+    def parse_commit_line( commit_line )
+      hash, rest = commit_line.split /\s+/,2
+      tag = rest ? rest[%r{tag: refs/tags/([^, \)]+)}, 1] : nil
+
+      [hash, tag]
+    end
+
+
+  end # class Parser
+
+
+  class Git
+    def log( branch )
+      `git log --pretty=fuller --decorate=full refs/heads/#{branch}`
+    end
+  end # class Git
+
+
+  class CLI
+    def self.build( argv )
+      options = parse_argv( argv )
+      new options
+    end
+
+    def initialize( options )
+      @options = options
+    end
+
+    def run
+      log_s   = Git.new.log @options[:branch]
+      parser  = Parser.new @options[:projname]
+      entries = parser.parse log_s
+
+      puts entries.map{|e| e.to_s}
+    end
+
+    private
+    def self.parse_argv( argv )
+      options = {}
+      opt_parser = OptionParser.new do |opts|
+        opts.banner = <<-BANNER
+Usage: #{$0} [options]
+
+Print the git changelog in a dpkg-compatible format.
+
+        BANNER
+
+        opts.on( "-n", "--app-name APPNAME",
+                 "The name of the project. Will appear as the package name. Required." ) do |name|
+          options[:projname] = name
+        end
+
+        opts.on( "-b", "--branch BRANCH",
+                 "The branch to generate the log from. Default 'master'." ) do |branch|
+          options[:branch] = branch
+        end
+
+        opts.on_tail( "-h", "This message." ) do
+          $stdout.puts opts
+          $stdout.puts
+          exit 0
+        end
+      end
+
+      opt_parser.parse argv
+
+      err("--app-name required!", opt_parser) unless options[:projname]
+      options[:branch] ||= "master"
+      options
+    end
+
+
+    def self.err(msg, opt_parser)
+      $stderr.puts msg
+      $stderr.puts
+      $stderr.puts opt_parser
+      exit 1
+    end
+
+
+  end # class CLI
+}

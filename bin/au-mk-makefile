@@ -1,0 +1,76 @@
+#!/usr/bin/env ruby
+
+app_name = ARGV.shift or fail "Need an app name!"
+deploy_root = "srv"
+src_repo = "src"
+
+
+puts <<-MAKEFILE
+ROOT:=$(shell pwd)/build
+APP=#{app_name}
+SRC_ROOT=#{deploy_root}/$(APP)
+SRC=$(SRC_ROOT)/source
+GEM_SRC=http://src.bytemark.co.uk/gems/
+APP_GEM_HOME=$(SRC_ROOT)/.gems
+BUNDLE_GEM_HOME=$(SRC_ROOT)/vendor/bundle
+GEM_SETUP=GEM_PATH=$(ROOT)/$(APP_GEM_HOME):$(ROOT)/$(GEM_HOME) GEM_HOME=$(ROOT)/$(APP_GEM_HOME)
+BUNDLE=$(ROOT)/$(APP_GEM_HOME)/bin/bundle
+DEB_FILENAME=pkg/$(APP)_$(shell cd src && git describe --tags --abbrev=0)_amd64.deb
+
+all: dpkg_prepare changelog tag gems deb
+
+
+# This task provides a $(ROOT)/$(SRC) directory with the current tip, to
+# enable building debug packages without tagging anything.
+# To use: make clean && make debug_tag all
+debug_tag:
+	mkdir -p $(shell dirname $(ROOT)/$(SRC))
+	git clone #{src_repo} $(ROOT)/$(SRC)
+	# Now we strap on uncommitted changes (although this will miss added
+	# files...)
+	(cd #{src_repo} && git diff -U3) | patch -d $(ROOT)/$(SRC) -u -p1
+	rm -rf $(ROOT)/$(SRC)/.git
+
+tag: $(ROOT)/$(SRC)
+
+changelog: $(ROOT)/usr/share/doc/$(APP)/changelog
+
+$(ROOT)/usr/share/doc/$(APP)/changelog:
+	mkdir -p $(ROOT)/usr/share/doc/$(APP)
+	(cd #{src_repo} && au-rebuild-changelog --app-name $(APP)) > $(ROOT)/usr/share/doc/$(APP)/changelog
+
+dpkg_prepare: $(ROOT)/DEBIAN/control 
+
+$(ROOT)/DEBIAN/control:
+	mkdir -p $(ROOT)/DEBIAN
+	au-mk-control #{src_repo} $(APP) > $(ROOT)/DEBIAN/control
+
+$(ROOT)/$(SRC): 
+	au-checkout-latest-tag #{src_repo} $(ROOT)/$(SRC)
+	#probably won't be there, but clobber it in case 
+	rm -rf $(ROOT)/$(SRC)/.git
+
+gems: $(ROOT)/$(APP_GEM_HOME)
+
+bundler: $(BUNDLE)
+
+$(BUNDLE):
+	mkdir -p $(ROOT)/$(APP_GEM_HOME)
+	/bin/bash -c '$(GEM_SETUP) gem install bundler --env-shebang --no-rdoc --no-ri --source=$(GEM_SRC) --install-dir=$(ROOT)/$(APP_GEM_HOME)'
+
+$(ROOT)/$(APP_GEM_HOME): $(ROOT)/$(SRC) bundler
+	/bin/bash -c 'cd $(ROOT)/$(SRC) && $(GEM_SETUP) $(BUNDLE) install --without=test,development'
+	rm -f $(ROOT)/$(BUNDLE_GEM_HOME)/cache/*
+	rm -f $(ROOT)/$(APP_GEM_HOME)/cache/*
+
+deb: $(DEB_FILENAME)
+	
+$(DEB_FILENAME):	$(ROOT)/DEBIAN/control
+	mkdir -p $(shell dirname $(DEB_FILENAME))
+	dpkg-deb --build build $(DEB_FILENAME)
+
+clean:
+	rm -rf $(ROOT) pkg
+
+.PHONY: all tag clean gems dpkg_prepare
+MAKEFILE

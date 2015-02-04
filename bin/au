@@ -1,0 +1,55 @@
+#!/usr/bin/env ruby
+
+require 'fileutils'
+
+command = ARGV.shift
+
+def usage()
+  puts <<-USAGE
+Usage: au <command> [options]
+
+Available commands:
+
+  new <projectname> <gitrepo>   Set up a new project.
+  release                       Build the .deb package for the project.
+
+`au new ..,` will make a directory and check out the git repository to
+src/ within that directory.
+
+`au release` needs to be run from within that repository, and will add a
+git tag to HEAD based on today's date to the git repository, before building 
+the .deb.  The .deb package will be put at pkg/<projectname>_<tag>_<arch>.deb.
+  USAGE
+end
+
+def new_project(argv)
+  project_name = argv.shift or fail "Need a project name!"
+  repo_to_clone = argv.shift or fail "Need a git repo to clone!"
+  FileUtils.mkdir_p(project_name)
+  FileUtils.mkdir_p(project_name +"/pkg")
+  system "git clone #{repo_to_clone} #{project_name}/src" or 
+    fail "Git cloning failed."
+end
+
+
+
+def release(argv)
+  # Take the project name from the dirname by default
+  # This needs to be run from the project directory
+  project_name = argv.shift || File.basename(Dir.pwd)
+  system "/bin/bash -c 'cd src && au-date-tag'" or fail "Couldn't add a release tag"
+  system "/bin/bash -c 'au-mk-makefile #{project_name} | make -f - all'" or fail "Couldn't build"
+end
+
+if ARGV.include?("--help") || ARGV.include?("-h")
+  usage()
+else
+  case command
+  when "new"
+    new_project(ARGV)
+  when "release"
+    release(ARGV)
+  else
+    usage()
+  end
+end

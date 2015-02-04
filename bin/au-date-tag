@@ -1,0 +1,80 @@
+#!/usr/bin/env ruby
+
+vcs = Git
+fail "Not in project root!" unless vcs
+tag = pick_tag_name( vcs.tags )
+
+if vcs.should_tag?
+  if ARGV.include?("--recon")
+    puts tag
+  else
+    system( vcs.tag_cmd( tag ) ) && puts( tag )
+  end
+else
+    puts vcs.current_tag
+end
+
+
+BEGIN {
+
+  class Git
+    def self.in_root?
+      File.directory?( ".git" )
+    end
+
+    def self.tags
+      `git tag`.split("\n").map{|s| s.strip}
+    end
+
+    def self.tag_cmd( tagname )
+      "git tag #{tagname}"
+    end
+
+    def self.should_tag?
+      # Have we ever been tagged?
+      description = `git describe --tags --always HEAD`.strip
+      
+      # If it matches the start of the commit hash, it's never been
+      # tagged, so we should give it one
+      head_commit_hash = `git log -1 --format=oneline | awk '{print $1}'`.strip
+      never_tagged = head_commit_hash.start_with?(description)
+
+      # If it matches /^\d{10}-\d/, that means there is a tag a few
+      # patches back, so we should give it a new one
+      tagged_then_patched = description =~ /^\d{10}-\d/
+
+      # If it matches /^\d{10}$/, that means there's a tag on HEAD we
+      # should reuse, and we should *not* give it a new one
+      rerelease = description =~ /^\d{10}$/
+
+      if never_tagged || tagged_then_patched
+        true
+      elsif rerelease
+        false
+      else
+        fail "au-date-tag can't understand this tag description: #{description}"
+      end
+    end
+
+    def self.current_tag
+      `git describe --tags HEAD`.strip
+    end
+  end
+
+
+  def pick_tag_name( current_tags )
+    datestr = Time.now.strftime( "%Y%m%d" )
+    i=1
+    tag = ""
+    loop do
+      maybe_tag = "%s%02d"%[datestr,i]
+      if current_tags.include?(maybe_tag)
+        i+=1
+      else
+        tag = maybe_tag
+        break
+      end
+    end
+    tag
+  end
+}

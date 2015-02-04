@@ -1,0 +1,28 @@
+#!/usr/bin/env ruby
+
+source_repo = ARGV.shift or raise "Need a local source repository!"
+app_name = ARGV.shift or raise "Need an app name!"
+description = "Internal Bytemark application"
+
+version = `cd #{source_repo} && git describe --tags --abbrev=0`.strip
+author = `cd #{source_repo} && git show #{version} | grep "Author: "| head -n1 | sed 's/Author: //'`.strip
+
+def format_description( desc )
+  lines = desc.split("\n")
+  first_line = lines.shift
+  indented_lines = lines.map {|line| "  " + line}
+  first_line + indented_lines.join("\n")
+end
+
+puts <<-CONTROL
+Source: #{app_name}
+Section: unknown
+Priority: extra
+Maintainer: #{author}
+Homepage: https://projects.bytemark.co.uk/projects/#{app_name}
+Package: #{app_name}
+Version: #{version}
+Architecture: amd64
+Depends: ruby-install-ruby1.9.3p484, iso-codes, libmysqlclient18, libxslt1.1, libxml2
+Description: #{format_description description}
+CONTROL
