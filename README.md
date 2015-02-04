@@ -12,8 +12,9 @@ Quick Start
     $ ls pkg/*.deb
     pkg/projectname_2015020401_amd64.deb
 
-This can then be uploaded to an apt repository or installed with a 
-`dpkg -i`.
+This can then be uploaded to an apt repository or installed directly
+with a `dpkg -i`.
+
 
 What it Does
 ------------
@@ -28,6 +29,31 @@ The `au release` command will add a date-based tag to HEAD of whatever
 branch is checked out in the `src` directory.  The package name uses the
 tag to specify the package version for Debian.
 
+This process uses whichever ruby you currently have active, and because
+binary gems are invariably involved, this needs to be the same ruby
+you're deploying to.
+
+You also need to build on the same distribution you're going to deploy
+to, otherwise linking to native libraries isn't going to work.
+
+To gather the dependencies for the package, `au release` finds first the
+package for the ruby you're using, then the dependencies for any binary
+gems in your app's $GEM\_HOME.
+
+Note that this means your local ruby *must* have been installed by
+apt-get, and must have the same package name as the ruby you'll be
+using in production.
+
+In addition, if there's a file called "depends" in your rails root, `au
+release` expects it to list additional apt dependencies which scanning
+the binary gems won't find.
+
+Note that the .deb produced pays no attention whatsoever to the Debian
+Packaging Guidelines: it does what it does to build the simplest
+possible thing that can work.
+
+Finally, there's also an `au clean` command, which will clear out the
+build/ and pkg/ directory.  Use this when things seem not to be working.
 
 Author
 ------

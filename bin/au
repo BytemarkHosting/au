@@ -22,6 +22,10 @@ the .deb.  The .deb package will be put at pkg/<projectname>_<tag>_<arch>.deb.
   USAGE
 end
 
+def make(project_name, task)
+  system "/bin/bash -c 'au-mk-makefile #{project_name} | make -f - #{task}'" or fail "Couldn't build"
+end
+
 def new_project(argv)
   project_name = argv.shift or fail "Need a project name!"
   repo_to_clone = argv.shift or fail "Need a git repo to clone!"
@@ -38,7 +42,11 @@ def release(argv)
   # This needs to be run from the project directory
   project_name = argv.shift || File.basename(Dir.pwd)
   system "/bin/bash -c 'cd src && au-date-tag'" or fail "Couldn't add a release tag"
-  system "/bin/bash -c 'au-mk-makefile #{project_name} | make -f - all'" or fail "Couldn't build"
+  make project_name, "all"
+end
+
+def clean
+  make "dummy", "clean"
 end
 
 if ARGV.include?("--help") || ARGV.include?("-h")
@@ -49,6 +57,8 @@ else
     new_project(ARGV)
   when "release"
     release(ARGV)
+  when "clean"
+    clean
   else
     usage()
   end

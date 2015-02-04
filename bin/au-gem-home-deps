@@ -1,0 +1,157 @@
+#!/usr/bin/env ruby
+
+CLI.new( ARGV ).run
+
+BEGIN {
+  require 'fileutils'
+  require 'optparse'
+  require 'pathname'
+  require 'set'
+  require 'pp'
+
+
+  class Options
+    attr_reader :gem_home
+    attr_reader :stdin
+
+    def initialize( argv )
+      parse argv
+    end
+
+    def stdin?
+      !!@stdin
+    end
+
+    private
+    def parse(argv)
+      opt_parser = OptionParser.new do |opts|
+        opts.banner = <<-BANNER
+Usage: #{$0} [options] [<GEM_HOME>]
+
+Prints the apt dependencies for binary gems in GEM_HOME to stdout.
+GEM_HOME defaults to $GEM_HOME.
+        BANNER
+
+        opts.on("-s", "--stdin", "Read additional dependencies from stdin") do
+          @stdin = true
+        end
+
+        opts.on_tail("-h", "--help",
+                     "This messages.") do
+          STDOUT.puts opts
+          STDOUT.puts
+          exit 0
+        end
+      end
+
+      opt_parser.parse! argv
+
+      @gem_home = argv.shift || ENV['GEM_HOME']
+    end
+
+
+  end # class Options
+
+
+  class SharedObject
+    def initialize( filename )
+      @path = Pathname filename
+    end
+
+    def depends
+      `ldd #{@path} | \
+        grep '=> /' | \
+        awk '{print $3}' | \
+        xargs -n1 dpkg -S | \
+        cut -f1 -d: | \
+        sort | 
+        uniq`.
+        split(/\n/).
+        map{|dep| dep.strip}
+    end
+  end # class SharedObject
+
+
+  class InstalledGem
+    attr_reader :gem_dir, :name
+
+    # gem_dir is $GEM_HOME/gems/foo
+    def initialize( gem_dir )
+      @gem_dir = Pathname gem_dir
+      @name = @gem_dir.basename.to_s
+    end
+
+
+    def gem_home
+      @gem_dir.dirname.dirname
+    end
+
+
+    def ext
+      @gem_dir + "ext"
+    end
+
+
+    def depends
+      Dir[ext + "**" + "*.so"].
+        map{|soname| SharedObject.new soname}.
+        map{|so| so.depends}
+    end
+
+  end # class InstalledGem
+
+
+  class GemHome
+    attr_reader :dir
+
+    def initialize( dir )
+      @dir = Pathname dir
+    end
+
+    def gems
+      dirs = gem_dirs dir.expand_path
+      dirs.map{|d| InstalledGem.new d}
+    end
+
+    def is_gem_home?
+      (@dir + "gems").exist?
+    end
+
+    private
+    def gem_dirs( dir )
+      Dir[dir + "gems" + "*"].
+        map{|g| Pathname g}.
+        select{|d| d.directory?}
+    end
+
+
+  end # class GemHome
+
+
+
+  class CLI
+
+    def initialize( argv )
+      @options = Options.new argv
+    end
+
+
+    def run
+      gem_home = GemHome.new @options.gem_home
+      unless gem_home.is_gem_home?
+        STDERR.puts "#{gem_home.dir} isn't a gem home."
+        exit 1
+      end
+
+      puts(STDIN.readlines) if @options.stdin?
+
+      gems = gem_home.gems
+      all_deps = Set.new
+      gems.each{|gem| gem.depends.each{|dep| all_deps += dep} }
+
+      puts all_deps.to_a.sort
+    end
+
+
+  end # class CLI
+}

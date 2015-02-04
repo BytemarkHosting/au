@@ -16,6 +16,7 @@ BUNDLE_GEM_HOME=$(SRC_ROOT)/vendor/bundle
 GEM_SETUP=GEM_PATH=$(ROOT)/$(APP_GEM_HOME):$(ROOT)/$(GEM_HOME) GEM_HOME=$(ROOT)/$(APP_GEM_HOME)
 BUNDLE=$(ROOT)/$(APP_GEM_HOME)/bin/bundle
 DEB_FILENAME=pkg/$(APP)_$(shell cd src && git describe --tags --abbrev=0)_amd64.deb
+DEPENDS_FILE=$(ROOT)/$(SRC)/depends
 
 all: dpkg_prepare changelog tag gems deb
 
@@ -41,14 +42,17 @@ $(ROOT)/usr/share/doc/$(APP)/changelog:
 
 dpkg_prepare: $(ROOT)/DEBIAN/control 
 
-$(ROOT)/DEBIAN/control:
+$(ROOT)/DEBIAN/control: $(ROOT)/$(APP_GEM_HOME) $(DEPENDS_FILE)
 	mkdir -p $(ROOT)/DEBIAN
-	au-mk-control #{src_repo} $(APP) > $(ROOT)/DEBIAN/control
+	(test -f $(DEPENDS_FILE) && cat $(DEPENDS_FILE)) | \
+		au-gem-home-deps -s $(ROOT)/$(APP_GEM_HOME) | \
+		au-mk-control #{src_repo} $(APP) > $(ROOT)/DEBIAN/control
 
-$(ROOT)/$(SRC): 
+$(ROOT)/$(SRC): #{src_repo}/.git/logs/HEAD
+	rm -rf $(ROOT)/$(SRC)
 	au-checkout-latest-tag #{src_repo} $(ROOT)/$(SRC)
-	#probably won't be there, but clobber it in case 
-	rm -rf $(ROOT)/$(SRC)/.git
+
+$(DEPENDS_FILE): $(ROOT)/$(SRC)
 
 gems: $(ROOT)/$(APP_GEM_HOME)
 

@@ -2,10 +2,14 @@
 
 source_repo = ARGV.shift or raise "Need a local source repository!"
 app_name = ARGV.shift or raise "Need an app name!"
-description = "Internal Bytemark application"
+description = "Au-packaged Ruby application"
 
 version = `cd #{source_repo} && git describe --tags --abbrev=0`.strip
 author = `cd #{source_repo} && git show #{version} | grep "Author: "| head -n1 | sed 's/Author: //'`.strip
+arch = `dpkg-architecture | grep DEB_BUILD_ARCH | head -n1 | sed 's/^DEB_BUILD_ARCH=//'`.strip
+
+ruby_pkg = `dpkg -S $(readlink -f $(which ruby))`.split(/:/).first
+depends = STDIN.readlines.map(&:strip).reject{|x| x.empty?}.join(", ")
 
 def format_description( desc )
   lines = desc.split("\n")
@@ -18,11 +22,10 @@ puts <<-CONTROL
 Source: #{app_name}
 Section: unknown
 Priority: extra
-Maintainer: #{author}
-Homepage: https://projects.bytemark.co.uk/projects/#{app_name}
 Package: #{app_name}
+Maintainer: #{author}
 Version: #{version}
-Architecture: amd64
-Depends: ruby-install-ruby1.9.3p484, iso-codes, libmysqlclient18, libxslt1.1, libxml2
+Architecture: #{arch}
+Depends: #{ruby_pkg}, #{depends}
 Description: #{format_description description}
 CONTROL
