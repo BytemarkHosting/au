@@ -55,6 +55,17 @@ possible thing that can work.
 Finally, there's also an `au clean` command, which will clear out the
 build/ and pkg/ directory.  Use this when things seem not to be working.
 
+
+What it Doesn't Do
+------------------
+
+`au` makes no claims to know how you're going to run your application,
+so doesn't build Procfiles, have any init.d scripts, or do whatever it
+would be that systemd wants.  All it does is get your app, and all its
+dependencies, onto the server.  The rest is up to you (but I'm a fan of
+runit and puma).
+
+
 Author
 ------
 

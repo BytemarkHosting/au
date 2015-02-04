@@ -1,14 +1,15 @@
 #!/usr/bin/env ruby
 
 app_name = ARGV.shift or fail "Need an app name!"
-deploy_root = "srv"
+prefix = ARGV.shift.to_s.sub("^/",'')
+prefix = "opt/apps" if prefix.empty?
 src_repo = "src"
 
 
 puts <<-MAKEFILE
 ROOT:=$(shell pwd)/build
 APP=#{app_name}
-SRC_ROOT=#{deploy_root}/$(APP)
+SRC_ROOT=#{prefix}/$(APP)
 SRC=$(SRC_ROOT)/source
 GEM_SRC=http://src.bytemark.co.uk/gems/
 APP_GEM_HOME=$(SRC_ROOT)/.gems

@@ -10,8 +10,8 @@ Usage: au <command> [options]
 
 Available commands:
 
-  new <projectname> <gitrepo>   Set up a new project.
-  release                       Build the .deb package for the project.
+  new <projectname> <gitrepo>     Set up a new project.
+  release [projectname] [prefix]  Build the .deb package for the project.
 
 `au new ..,` will make a directory and check out the git repository to
 src/ within that directory.
@@ -19,11 +19,13 @@ src/ within that directory.
 `au release` needs to be run from within that repository, and will add a
 git tag to HEAD based on today's date to the git repository, before building 
 the .deb.  The .deb package will be put at pkg/<projectname>_<tag>_<arch>.deb.
+Passing [projectname] is optional, and defaults to $(basename $(pwd)).  Pass [prefix]
+if you want the app installed somewhere other than /opt/apps.
   USAGE
 end
 
-def make(project_name, task)
-  system "/bin/bash -c 'au-mk-makefile #{project_name} | make -f - #{task}'" or fail "Couldn't build"
+def make(project_name, task, prefix="")
+  system "/bin/bash -c 'au-mk-makefile #{project_name} #{prefix}| make -f - #{task}'" or fail "Couldn't build"
 end
 
 def new_project(argv)
@@ -41,8 +43,9 @@ def release(argv)
   # Take the project name from the dirname by default
   # This needs to be run from the project directory
   project_name = argv.shift || File.basename(Dir.pwd)
+  prefix = argv.shift
   system "/bin/bash -c 'cd src && au-date-tag'" or fail "Couldn't add a release tag"
-  make project_name, "all"
+  make project_name, "all", prefix
 end
 
 def clean
