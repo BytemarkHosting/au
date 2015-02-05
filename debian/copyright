@@ -1,0 +1,16 @@
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: au
+Source: git@dev.bytemark.co.uk:au.git
+
+Files: *
+Copyright: 2015 Alex Young <alex@bytemark.co.uk>
+License: BSD-3-clause
+
+Files: debian/*
+Copyright: 2015 Alex Young <alex@bytemark.co.uk>
+License: BSD-3-clause
+
+License: BSD-3-clause
+ On Debian systems, the complete text of the Berkeley software
+ distribution license, 3-clause version can be found in
+ "/usr/share/common-licenses/BSD".
