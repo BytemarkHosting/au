@@ -14,7 +14,7 @@ SRC=$(SRC_ROOT)/source
 GEM_SRC=http://src.bytemark.co.uk/gems/
 APP_GEM_HOME=$(SRC_ROOT)/.gems
 BUNDLE_GEM_HOME=$(SRC_ROOT)/vendor/bundle
-GEM_SETUP=GEM_PATH=$(ROOT)/$(APP_GEM_HOME):$(ROOT)/$(GEM_HOME) GEM_HOME=$(ROOT)/$(APP_GEM_HOME)
+GEM_SETUP=GEM_PATH=$(ROOT)/$(APP_GEM_HOME) GEM_HOME=$(ROOT)/$(APP_GEM_HOME)
 BUNDLE=$(ROOT)/$(APP_GEM_HOME)/bin/bundle
 DEB_FILENAME=pkg/$(APP)_$(shell cd src && git describe --tags --abbrev=0)_amd64.deb
 DEPENDS_FILE=$(ROOT)/$(SRC)/depends
@@ -60,6 +60,10 @@ gems: $(ROOT)/$(APP_GEM_HOME)
 bundler: $(BUNDLE)
 
 $(BUNDLE):
+	# Bundler gives us no easy way to determine whether the app itself
+	# depends on bundler, or would work without it.  Because of that we
+	# *have* to include it in the app's $GEM_HOME on the off-chance it's
+	# needed.  This is bad and wrong.
 	mkdir -p $(ROOT)/$(APP_GEM_HOME)
 	/bin/bash -c '$(GEM_SETUP) gem install bundler --env-shebang --no-rdoc --no-ri --source=$(GEM_SRC) --install-dir=$(ROOT)/$(APP_GEM_HOME)'
 
