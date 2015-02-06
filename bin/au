@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 
 require 'fileutils'
+require 'optparse'
 
 command = ARGV.shift
 
@@ -12,6 +13,8 @@ Available commands:
 
   new <projectname> <gitrepo>     Set up a new project.
   release [projectname] [prefix]  Build the .deb package for the project.
+  debug [projectname] [prefix]    Build a .deb as with `release`, but incorporating
+                                  local changes in src/.
 
 `au new ..,` will make a directory and check out the git repository to
 src/ within that directory.
@@ -21,19 +24,91 @@ git tag to HEAD based on today's date to the git repository, before building
 the .deb.  The .deb package will be put at pkg/<projectname>_<tag>_<arch>.deb.
 Passing [projectname] is optional, and defaults to $(basename $(pwd)).  Pass [prefix]
 if you want the app installed somewhere other than /opt/apps.
+
+`au debug` is the same as `au release`, except that it doesn't generate a new tag, and
+it copies local changes, committed or uncommitted, to the package.  The package will
+have the same name and version as indicated by the most recent tag.
   USAGE
 end
+
+
+class CommandOptionsParser
+  attr_reader :help
+
+  def initialize(argv)
+    parse(argv)
+  end
+
+  private
+
+  # Extend this in subclasses to do things with argv
+  def parse(argv)
+    argv_copy = argv.dup
+    opts = add_options(init_parser)
+    opts.parse!(argv_copy)
+    argv_copy
+  end
+
+  def init_parser
+    OptionParser.new do |opts|
+      opts.on("-h", "--help", "Help message") do 
+        @help = true
+      end
+    end
+  end
+
+  # Override this in subclasses to add options
+  def add_options(opts)
+    opts
+  end
+end # class CommandOptionsParser
+
+
+class NewOptions < CommandOptionsParser
+  attr_reader :project_name
+  attr_reader :git_repo
+
+  def parse(argv)
+    argv_copy = super
+    @project_name = argv_copy.shift
+    @git_repo = argv_copy.shift
+    argv_copy
+  end
+end # class NewOptions
+
+
+class ReleaseOptions < CommandOptionsParser
+  attr_reader :project_name
+  attr_reader :prefix
+  attr_reader :help
+
+  def parse(argv)
+    argv_copy = super
+    @project_name = argv_copy.shift
+    @prefix = argv_copy.shift
+    argv_copy
+  end
+
+  private
+  def add_options(opts)
+    opts.on("-d", "--debug", "Build without tagging") do
+      @debug = true
+    end
+  end
+end # class ReleaseOptions
+
 
 def make(project_name, task, prefix="")
   system "/bin/bash -c 'au-mk-makefile #{project_name} #{prefix}| make -f - #{task}'" or fail "Couldn't build"
 end
 
+
 def new_project(argv)
-  project_name = argv.shift or fail "Need a project name!"
-  repo_to_clone = argv.shift or fail "Need a git repo to clone!"
-  FileUtils.mkdir_p(project_name)
-  FileUtils.mkdir_p(project_name +"/pkg")
-  system "git clone #{repo_to_clone} #{project_name}/src" or 
+  options = NewOptions.new(argv)
+  fail "Need a project name!" unless options.project_name
+  fail "Need a git repo to clone!" unless options.git_repo
+  FileUtils.mkdir_p(options.project_name + "/pkg")
+  system "git clone #{options.git_repo} #{options.project_name}/src" or 
     fail "Git cloning failed."
 end
 
@@ -42,10 +117,14 @@ end
 def release(argv)
   # Take the project name from the dirname by default
   # This needs to be run from the project directory
-  project_name = argv.shift || File.basename(Dir.pwd)
-  prefix = argv.shift
+  options = ReleaseOptions.new(argv)
   system "/bin/bash -c 'cd src && au-date-tag'" or fail "Couldn't add a release tag"
-  make project_name, "all", prefix
+  make options.project_name, "all", options.prefix
+end
+
+def debug(argv)
+  options = ReleaseOptions.new(argv)
+  make options.project_name, "debug_tag all", options.prefix
 end
 
 def clean
@@ -60,6 +139,8 @@ else
     new_project(ARGV)
   when "release"
     release(ARGV)
+  when "debug"
+    debug(ARGV)
   when "clean"
     clean
   else
