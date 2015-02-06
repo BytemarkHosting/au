@@ -1,0 +1,5 @@
+debian/au.debhelper.log
+debian/au.substvars
+debian/au/
+debian/files
+
