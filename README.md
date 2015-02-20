@@ -31,7 +31,12 @@ tag to specify the package version for Debian.
 
 This process uses whichever ruby you currently have active, and because
 binary gems are invariably involved, this needs to be the same ruby
-you're deploying to.
+you're deploying to.  `au` also generates a script called
+`/srv/<projectname>/activate`,  which contains environment settings
+needed to correctly activate the installed gems.  As ruby now includes
+its own set of gems,  `au` needs your active ruby to be installed in the
+same location as it will be in production: having the same version alone
+isn't going to be enough.
 
 You also need to build on the same distribution you're going to deploy
 to, otherwise linking to native libraries isn't going to work.
