@@ -18,7 +18,8 @@ BUNDLE=$(ROOT)/$(APP_GEM_HOME)/bin/bundle
 DEB_FILENAME=pkg/$(APP)_$(shell cd src && git describe --tags --abbrev=0)_amd64.deb
 DEPENDS_FILE=$(ROOT)/$(SRC)/depends
 
-all: dpkg_prepare changelog tag gems prepare deb
+# No idea why activate needs to be explicitly listed here.
+all: dpkg_prepare changelog tag $(ROOT)/$(SRC_ROOT)/activate prepare deb
 
 
 # This task provides a $(ROOT)/$(SRC) directory with the current tip, to
@@ -79,6 +80,11 @@ $(ROOT)/$(APP_GEM_HOME): $(ROOT)/$(SRC) bundler
 	rm -f $(ROOT)/$(BUNDLE_GEM_HOME)/cache/*
 	rm -f $(ROOT)/$(APP_GEM_HOME)/cache/*
 
+$(ROOT)/$(SRC_ROOT)/activate: $(ROOT)/$(SRC)
+	au-mk-activate $(APP_GEM_HOME) > $@
+
+activate: $(ROOT)/$(SRC_ROOT)
+
 deb: $(DEB_FILENAME)
 	
 $(DEB_FILENAME):	$(ROOT)/DEBIAN/control
@@ -88,5 +94,5 @@ $(DEB_FILENAME):	$(ROOT)/DEBIAN/control
 clean:
 	rm -rf $(ROOT) pkg
 
-.PHONY: all tag clean gems dpkg_prepare prepare
+.PHONY: all debug_tag tag clean gems dpkg_prepare prepare
 MAKEFILE

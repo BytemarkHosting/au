@@ -1,0 +1,21 @@
+#!/usr/bin/env ruby
+
+# Generates a virtualenv-style `activate` script to set the environment
+# variables needed to point at the given GEM_HOME.  Note: it bakes in a
+# reference to the ruby installation which is active when you call this script.
+# You must make sure not only that you have the right ruby version,  but also
+# that it is installed in the right place.
+#
+# Usage: 
+#   $ au-mk-activate /my/gem/home > activate
+#   $ source activate
+
+gem_home = ARGV.shift or fail "Need a GEM_HOME!"
+ruby_gem_home = Gem.default_dir
+ruby_bin_path = Gem.default_bindir
+
+puts <<-ACTIVATE
+export GEM_HOME=#{gem_home}
+export GEM_PATH=#{gem_home}:#{ruby_gem_home}
+export PATH=#{gem_home}/bin:#{ruby_bin_path}:$PATH
+ACTIVATE
