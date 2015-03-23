@@ -27,15 +27,19 @@ all: dpkg_prepare changelog tag $(ROOT)/$(SRC_ROOT)/activate prepare deb
 # To use: make clean && make debug_tag all
 debug_tag:
 	mkdir -p $(shell dirname $(ROOT)/$(SRC))
+	# Get rid of any stale version we've got lying around
+	rm -rf $(ROOT)/$(SRC)
+	# Grab the code...
 	git clone #{src_repo} $(ROOT)/$(SRC)
 	# Uncommitted modifications...
 	(cd #{src_repo} && git diff -U3) | patch -d $(ROOT)/$(SRC) -u -p1
 	# Remove deleted files...
-	# This usees a `while read` instead of an xargs because if there
+	# This uses a `while read` instead of an xargs because if there
 	# aren't any deleted files, `xargs rm` breaks.
 	(cd #{src_repo} && git status --short | grep '^D' | awk '{print $$2}' | (cd $(ROOT)/$(SRC) && while read deleted; do rm $deleted; done))
 	# Add untracked and unignored files...
 	(cd #{src_repo} && git status --short | grep '^\?\?' | awk '{print $$2}' | tar -cf - -T - | (cd $(ROOT)/$(SRC) && tar -xf -))
+	# Pretend it's not a git clone
 	rm -rf $(ROOT)/$(SRC)/.git
 
 tag: $(ROOT)/$(SRC)
