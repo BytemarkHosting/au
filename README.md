@@ -8,7 +8,7 @@ Quick Start
 
     $ au new projectname git@host:project/name.git
     $ cd projectname
-    $ au release
+    $ au release projectname
     $ ls pkg/*.deb
     pkg/projectname_2015020401_amd64.deb
 
@@ -22,8 +22,10 @@ What it Does
 `au new` makes a new directory, and checks out the source repo you pass
 to it into <projectname>/src.
 
-Running `au release` will package the app up with its gem dependencies
-(via bundler) such that it will install to /srv/<projectname>.
+Running `au release projectname` will package the app up with its gem
+dependencies (via bundler) such that it will install to
+`/opt/apps/<projectname>`.  If you want a different prefix, pass it on
+the command line: `au release projectname /srv`, for instance.
 
 The `au release` command will add a date-based tag to HEAD of whatever
 branch is checked out in the `src` directory.  The package name uses the
