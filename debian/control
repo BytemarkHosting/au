@@ -1,12 +1,12 @@
 Source: au
-Section: unknown
+Section: devel
 Priority: extra
 Maintainer: Alex Young <alex@bytemark.co.uk>
 Build-Depends: debhelper (>= 8.0.0)
 Standards-Version: 3.9.3
 
 Package: au
-Architecture: any
+Architecture: all
 Depends: ${misc:Depends}, dpkg, dpkg-dev, ruby, git, make
 Description: <insert up to 60 chars description>
  <insert long description, indented with spaces>
