@@ -3,71 +3,65 @@
 app_name = ARGV.shift or fail "Need an app name!"
 prefix = ARGV.shift.to_s.sub("^/",'')
 prefix = "opt/apps" if prefix.empty?
-src_repo = "src"
-
 
 puts <<-MAKEFILE
-ROOT:=$(shell pwd)/build
-APP=#{app_name}
-SRC_ROOT=#{prefix}/$(APP)
-SRC=$(SRC_ROOT)/source
-APP_GEM_HOME=$(SRC_ROOT)/.gems
-BUNDLE_GEM_HOME=$(SRC_ROOT)/vendor/bundle
-GEM_SETUP=GEM_PATH=$(ROOT)/$(APP_GEM_HOME) GEM_HOME=$(ROOT)/$(APP_GEM_HOME) PATH=$(ROOT)/$(APP_GEM_HOME)/bin:$(PATH)
-BUNDLE=$(ROOT)/$(APP_GEM_HOME)/bin/bundle
-DEB_FILENAME=pkg/$(APP)_$(shell cd src && git describe --tags --abbrev=0)_amd64.deb
-DEPENDS_FILE=$(ROOT)/$(SRC)/depends
+REPO=src
+BUILD_ROOT:=$(PWD)/build
 
-# No idea why activate needs to be explicitly listed here.
-all: dpkg_prepare changelog tag $(ROOT)/$(SRC_ROOT)/activate prepare deb
+APP=#{ app_name }
+APP_HOME=#{ prefix }/$(APP)
+APP_SOURCE=$(APP_HOME)/source
+APP_GEM_HOME=$(APP_HOME)/.gems
+VERSION=$(shell cd $(REPO) && au-rebuild-changelog -n $(APP) -v)
 
+BUNDLE_GEM_HOME=$(APP_HOME)/vendor/bundle
+GEM_SETUP=GEM_PATH=$(BUILD_ROOT)/$(APP_GEM_HOME) GEM_HOME=$(BUILD_ROOT)/$(APP_GEM_HOME) PATH=$(BUILD_ROOT)/$(APP_GEM_HOME)/bin:$(PATH)
+BUNDLE=$(BUILD_ROOT)/$(APP_GEM_HOME)/bin/bundle
 
-# This task provides a $(ROOT)/$(SRC) directory with the current tip, to
+DEB_FILENAME=pkg/$(APP)_$(VERSION)_amd64.deb
+DEPENDS_FILE=$(BUILD_ROOT)/$(APP_SOURCE)/depends
+
+all: control changelog source prepare deb
+
+# This task provides a $(BUILD_ROOT)/$(APP_SOURCE) directory with the current tip, to
 # enable building debug packages without tagging anything.
 # To use: make clean && make debug_tag all
-debug_tag:
-	mkdir -p $(shell dirname $(ROOT)/$(SRC))
-	# Get rid of any stale version we've got lying around
-	rm -rf $(ROOT)/$(SRC)
-	# Grab the code...
-	git clone #{src_repo} $(ROOT)/$(SRC)
+debug_source: clean source
 	# Uncommitted modifications...
-	(cd #{src_repo} && git diff -U3) | patch -d $(ROOT)/$(SRC) -u -p1
+	(cd ${REPO} && git diff -U3) | patch -d $(BUILD_ROOT)/$(APP_SOURCE) -u -p1
 	# Remove deleted files...
 	# This uses a `while read` instead of an xargs because if there
 	# aren't any deleted files, `xargs rm` breaks.
-	(cd #{src_repo} && git status --short | grep '^D' | awk '{print $$2}' | (cd $(ROOT)/$(SRC) && while read deleted; do rm $deleted; done))
+	(cd ${REPO} && git status --short | grep '^D' | awk '{print $$2}' | (cd $(BUILD_ROOT)/$(APP_SOURCE) && while read deleted; do rm $deleted; done))
 	# Add untracked and unignored files...
-	(cd #{src_repo} && git status --short | grep '^\?\?' | awk '{print $$2}' | tar -cf - -T - | (cd $(ROOT)/$(SRC) && tar -xf -))
-	# Pretend it's not a git clone
-	rm -rf $(ROOT)/$(SRC)/.git
+	(cd ${REPO} && git status --short | grep '^??' | awk '{print $$2}' | tar -cf - -T - | (cd $(BUILD_ROOT)/$(APP_SOURCE) && tar -xf -))
 
-tag: $(ROOT)/$(SRC)
+source: $(BUILD_ROOT)/$(APP_SOURCE)
 
-changelog: $(ROOT)/usr/share/doc/$(APP)/changelog
+changelog: $(BUILD_ROOT)/usr/share/doc/$(APP)/changelog
 
-$(ROOT)/usr/share/doc/$(APP)/changelog:
-	mkdir -p $(ROOT)/usr/share/doc/$(APP)
-	(cd #{src_repo} && au-rebuild-changelog --app-name $(APP)) > $(ROOT)/usr/share/doc/$(APP)/changelog
+$(BUILD_ROOT)/usr/share/doc/$(APP)/changelog:
+	mkdir -p $(BUILD_ROOT)/usr/share/doc/$(APP)
+	(cd ${REPO} && au-rebuild-changelog --app-name $(APP)) > $(BUILD_ROOT)/usr/share/doc/$(APP)/changelog
 
-dpkg_prepare: $(ROOT)/DEBIAN/control
+control: changelog $(BUILD_ROOT)/DEBIAN/control
 
-$(ROOT)/DEBIAN/control: $(ROOT)/$(APP_GEM_HOME) $(DEPENDS_FILE)
-	mkdir -p $(ROOT)/DEBIAN
-	(test -f $(DEPENDS_FILE) && cat $(DEPENDS_FILE)) | \
-		au-gem-home-deps -s $(ROOT)/$(APP_GEM_HOME) | \
-		au-mk-control #{src_repo} $(APP) > $(ROOT)/DEBIAN/control
+$(BUILD_ROOT)/DEBIAN/control: $(BUILD_ROOT)/$(APP_GEM_HOME) $(DEPENDS_FILE)
+	mkdir -p $(BUILD_ROOT)/DEBIAN
+	(test -f $(DEPENDS_FILE) && cat $(DEPENDS_FILE)) |\
+ 		au-gem-home-deps -s $(BUILD_ROOT)/$(APP_GEM_HOME) |\
+ 		au-mk-control $(BUILD_ROOT)/usr/share/doc/$(APP)/changelog > $(BUILD_ROOT)/DEBIAN/control
 
-$(ROOT)/$(SRC): #{src_repo}/.git/logs/HEAD
-	rm -rf $(ROOT)/$(SRC)
-	au-checkout-latest-tag #{src_repo} $(ROOT)/$(SRC)
+$(BUILD_ROOT)/$(APP_SOURCE): ${REPO}/.git/logs/HEAD
+	mkdir -p ${BUILD_ROOT}
+	(cd "${REPO}"; 		git archive --format=tar --prefix="${APP_SOURCE}/" HEAD | 		tar -xf- -C "${BUILD_ROOT}")
 
-$(DEPENDS_FILE): $(ROOT)/$(SRC)
+$(DEPENDS_FILE): $(BUILD_ROOT)/$(APP_SOURCE)
 
-gems: $(ROOT)/$(APP_GEM_HOME)
+gems: $(BUILD_ROOT)/$(APP_GEM_HOME)
 
 prepare:
-	if [ -e $(ROOT)/$(SRC)/Makefile ]; then (cd $(ROOT)/$(SRC) && $(GEM_SETUP) make release) fi
+	if [ -e $(BUILD_ROOT)/$(APP_SOURCE)/Makefile ]; then (cd $(BUILD_ROOT)/$(APP_SOURCE) && $(GEM_SETUP) make release) fi
 
 bundler: $(BUNDLE)
 
@@ -76,27 +70,30 @@ $(BUNDLE):
 	# depends on bundler, or would work without it.  Because of that we
 	# *have* to include it in the app's $$GEM_HOME on the off-chance it's
 	# needed.  This is bad and wrong.
-	mkdir -p $(ROOT)/$(APP_GEM_HOME)
-	/bin/bash -c '$(GEM_SETUP) gem install bundler --env-shebang --no-rdoc --no-ri --install-dir=$(ROOT)/$(APP_GEM_HOME)'
+	mkdir -p $(BUILD_ROOT)/$(APP_GEM_HOME)
+	/bin/bash -c '$(GEM_SETUP) gem install bundler --env-shebang --no-rdoc --no-ri --install-dir=$(BUILD_ROOT)/$(APP_GEM_HOME)'
 
-$(ROOT)/$(APP_GEM_HOME): $(ROOT)/$(SRC) bundler
-	/bin/bash -c 'cd $(ROOT)/$(SRC) && $(GEM_SETUP) $(BUNDLE) install --without=test,development'
-	rm -f $(ROOT)/$(BUNDLE_GEM_HOME)/cache/*
-	rm -f $(ROOT)/$(APP_GEM_HOME)/cache/*
+$(BUILD_ROOT)/$(APP_GEM_HOME): $(BUILD_ROOT)/$(APP_SOURCE) bundler
+	/bin/bash -c 'cd $(BUILD_ROOT)/$(APP_SOURCE) && $(GEM_SETUP) $(BUNDLE) install --without=test,development'
+	rm -f $(BUILD_ROOT)/$(BUNDLE_GEM_HOME)/cache/*
+	rm -f $(BUILD_ROOT)/$(APP_GEM_HOME)/cache/*
 
-$(ROOT)/$(SRC_ROOT)/activate: $(ROOT)/$(SRC)
-	au-mk-activate $(APP_GEM_HOME) > $@
+$(BUILD_ROOT)/$(APP_HOME)/activate: $(BUILD_ROOT)/$(APP_SOURCE)
+	echo export GEM_HOME=/${APP_GEM_HOME} > $@
+	echo export GEM_PATH=/${APP_GEM_HOME}:\`gem environment gempath\` >> $@
+	echo export PATH=/${APP_GEM_HOME}/.bin:\$$PATH >> $@
 
-activate: $(ROOT)/$(SRC_ROOT)
+activate: $(BUILD_ROOT)/$(APP_HOME)/activate
 
 deb: $(DEB_FILENAME)
 	
-$(DEB_FILENAME):	$(ROOT)/DEBIAN/control
+$(DEB_FILENAME):	$(BUILD_ROOT)/DEBIAN/control activate
 	mkdir -p $(shell dirname $(DEB_FILENAME))
 	dpkg-deb --build build $(DEB_FILENAME)
 
 clean:
-	rm -rf $(ROOT) pkg
+	rm -rf build pkg
 
-.PHONY: all debug_tag tag clean gems dpkg_prepare prepare
+.PHONY: all debug_source source clean gems control prepare
+
 MAKEFILE
