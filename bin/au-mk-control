@@ -1,12 +1,11 @@
 #!/usr/bin/env ruby
 
-source_repo = ARGV.shift or raise "Need a local source repository!"
-app_name = ARGV.shift or raise "Need an app name!"
+app_name = `dpkg-parsechangelog -l #{ARGV[0]} -S Source`.strip
 description = "Au-packaged Ruby application"
 
-version = `cd #{source_repo} && git describe --tags --abbrev=0`.strip
-author = `cd #{source_repo} && git show #{version} | grep "Author: "| head -n1 | sed 's/Author: //'`.strip
-arch = `dpkg-architecture | grep DEB_BUILD_ARCH | head -n1 | sed 's/^DEB_BUILD_ARCH=//'`.strip
+version = `dpkg-parsechangelog -l #{ARGV[0]} -S Version`.strip
+author = `dpkg-parsechangelog -l #{ARGV[0]} -S Maintainer`.strip
+arch = `dpkg-architecture -q DEB_BUILD_ARCH`.strip
 
 ruby_pkg = `dpkg -S $(readlink -f $(which ruby))`.split(/:/).first
 depends = STDIN.readlines.map(&:strip).reject{|x| x.empty?}.join(", ")
@@ -20,7 +19,7 @@ end
 
 puts <<-CONTROL
 Source: #{app_name}
-Section: unknown
+Section: ruby
 Priority: extra
 Package: #{app_name}
 Maintainer: #{author}

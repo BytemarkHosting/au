@@ -12,7 +12,8 @@ Usage: au <command> [options]
 Available commands:
 
   new <projectname> <gitrepo>     Set up a new project.
-  release [projectname] [prefix]  Build the .deb package for the project.
+  release [projectname] [prefix]  Tag source as a release and build the .deb package.
+  build [projectname] [prefix]    Build the .deb package for the project.
   debug [projectname] [prefix]    Build a .deb as with `release`, but incorporating
                                   local changes in src/.
 
@@ -117,14 +118,18 @@ end
 def release(argv)
   # Take the project name from the dirname by default
   # This needs to be run from the project directory
-  options = ReleaseOptions.new(argv)
   system "/bin/bash -c 'cd src && au-date-tag'" or fail "Couldn't add a release tag"
+  build(argv)
+end
+
+def build(argv)
+  options = ReleaseOptions.new(argv)
   make options.project_name, "all", options.prefix
 end
 
 def debug(argv)
   options = ReleaseOptions.new(argv)
-  make options.project_name, "debug_tag all", options.prefix
+  make options.project_name, "debug_source all", options.prefix
 end
 
 def clean
@@ -139,6 +144,8 @@ else
     new_project(ARGV)
   when "release"
     release(ARGV)
+	when "build"
+		build(ARGV)
   when "debug"
     debug(ARGV)
   when "clean"

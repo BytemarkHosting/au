@@ -11,13 +11,30 @@ BEGIN {
   # Encapsulates a single entry in the changelog. An entry is all
   # commits between this tag and the last one.
   class ChangelogEntry
-    attr_accessor :email
-    attr_accessor :author_name
-    attr_accessor :date
-    def initialize(projname, tag)
+    attr_reader :snapshot
+    attr_writer :tag
+
+    def initialize(projname, header)
       @projname = projname
-      @tag = tag
+      @header = header
+      @snapshot = header[:tag].nil?
       @lines = []
+    end
+
+    def method_missing(sym, *args, &block)
+      if @header.keys.include?(sym)
+        @header[sym]
+      else
+        raise NoMethodError, sym
+      end
+    end
+
+    def hash
+      @header[:hash]
+    end
+
+    def tag
+      @tag ||= @header[:tag]
     end
 
     def close( stream )
@@ -25,30 +42,68 @@ BEGIN {
     end
 
     def <<( msg )
-      @lines << msg
+      @lines << "  * "+msg.split("\n").first.strip
+    end
+
+    def entry_author( name )
+      return if @current_author_name.nil? and name == author_name
+      return if @current_author_name == name
+
+      if @current_author_name.nil?
+        @lines.unshift("  [ "+author_name+" ]")
+      end
+
+      @current_author_name = name
+      @lines << ""
+      @lines << "  [ "+name+" ]"
+    end
+
+    def build_number
+      #
+      # Jenkins and Gitlab CI both set build numbers.
+      #
+      ENV["BUILD_NUMBER"] || ENV["CI_BUILD_ID"] || "1"
+    end
+
+    def version
+      if snapshot?
+        #
+        # Jenkins and Gitlab CI both set build numbers.
+        #
+        tag + "~" + build_number + ".au" + self.hash.to_s.slice(0,7)
+      else
+        tag
+      end
+    end
+
+    def snapshot?
+      @snapshot
     end
 
     def to_s
       template = <<-TEMPLATE
-<%= @projname %> (<%= @tag %>) stable; urgency=low
+<%= @projname %> (<%= version %>) stable; urgency=low
+<% if snapshot? -%>
 
-<% for line in @lines -%>
-  * <%= line.split("\n").first.strip %>
+  ** SNAPSHOT build @<%= hash.to_s %> **
 <% end -%>
 
- -- <%= @author_name %> <<%= @email %>>  <%= render_date %>
+<% for line in @lines -%>
+<%= line %>
+<% end -%>
+
+ -- <%= author_name %> <<%= email %>>  <%= date %>
 
     TEMPLATE
 
       ERB.new(template, nil, "-").result(binding)
     end
 
-    def render_date
-      DateTime.parse(@date).rfc2822
+    def date
+      DateTime.parse(@header[:date]).rfc2822
     end
 
   end
-
 
   class Parser
 
@@ -58,7 +113,6 @@ BEGIN {
       @entries = []
       @current_entry = nil
     end
-
 
     # Just read it all in and split it for now. No sense building a
     # state machine until we need it
@@ -70,27 +124,28 @@ BEGIN {
         next if chunk.strip.empty?
         parse_chunk chunk
       end
+
+      if @entries.length > 0 and @entries.first.tag.nil?
+        if @entries.length > 1
+          @entries[0].tag = @entries[1].tag.succ
+        else
+          @entries[0].tag = "0"
+        end
+      end
+
       @entries
     end
 
 
     private
 
-    def fresh_entry( projname, header )
-      entry = ChangelogEntry.new projname, header[:tag]
-      entry.email = header[:email]
-      entry.author_name = header[:author_name]
-      entry.date = header[:date]
-      entry
-    end
-
-
     def current_entry( header )
-      if header[:tag]
-        new_entry = fresh_entry @projname, header
+      if header[:tag] or @entries.empty?
+        new_entry = ChangelogEntry.new(@projname, header)
         @entries << new_entry
         @current_entry = new_entry
       else
+        @current_entry.entry_author(header[:author_name])
         @current_entry
       end
     end
@@ -102,7 +157,7 @@ BEGIN {
       title = dedent title_s
 
       if entry = current_entry( header )
-        entry << title if title !~ /Added tag.*for changeset/
+        entry << title
       end
     end
 
@@ -152,7 +207,7 @@ BEGIN {
 
   class Git
     def log( branch )
-      `git log --pretty=fuller --decorate=full refs/heads/#{branch}`
+      `git log --pretty=fuller --decorate=full refs/heads/#{branch}` || exit 1
     end
   end # class Git
 
@@ -172,7 +227,11 @@ BEGIN {
       parser  = Parser.new @options[:projname]
       entries = parser.parse log_s
 
-      puts entries.map{|e| e.to_s}
+      if @options[:version]
+        puts entries.first.version
+      else
+        puts entries.map{|e| e.to_s}
+      end
     end
 
     private
@@ -194,6 +253,11 @@ Print the git changelog in a dpkg-compatible format.
         opts.on( "-b", "--branch BRANCH",
                  "The branch to generate the log from. Default 'master'." ) do |branch|
           options[:branch] = branch
+        end
+
+        opts.on( "-v", "--version",
+                  "Output the version") do
+          options[:version] = true
         end
 
         opts.on_tail( "-h", "This message." ) do
