@@ -207,7 +207,9 @@ BEGIN {
 
   class Git
     def log( branch )
-      `git log --pretty=fuller --decorate=full refs/heads/#{branch}` || exit 1
+      l = `git log --pretty=fuller --decorate=full refs/heads/#{branch}` 
+      exit 1 unless $?.success?
+      l
     end
   end # class Git
 
