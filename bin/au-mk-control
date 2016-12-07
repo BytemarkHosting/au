@@ -1,10 +1,10 @@
 #!/usr/bin/env ruby
 
-app_name = `dpkg-parsechangelog -l #{ARGV[0]} -S Source`.strip
+app_name = `dpkg-parsechangelog -l#{ARGV[0]} -S Source`.strip
 description = "Au-packaged Ruby application"
 
-version = `dpkg-parsechangelog -l #{ARGV[0]} -S Version`.strip
-author = `dpkg-parsechangelog -l #{ARGV[0]} -S Maintainer`.strip
+version = `dpkg-parsechangelog -l#{ARGV[0]} -S Version`.strip
+author = `dpkg-parsechangelog -l#{ARGV[0]} -S Maintainer`.strip
 arch = `dpkg-architecture -q DEB_BUILD_ARCH`.strip
 
 ruby_pkg = `dpkg -S $(readlink -f $(which ruby))`.split(/:/).first
