@@ -1,7 +1,7 @@
 Source: au
 Section: devel
 Priority: extra
-Maintainer: Alex Young <alex@bytemark.co.uk>
+Maintainer: Patrick J Cherry <patrick@bytemark.co.uk>
 Build-Depends: debhelper (>= 8.0.0)
 Standards-Version: 3.9.3
 
