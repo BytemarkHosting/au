@@ -1,6 +1,5 @@
 #!/usr/bin/env ruby
 
-
 CLI.build( ARGV ).run
 
 BEGIN {
@@ -156,7 +155,7 @@ BEGIN {
       header = parse_header header_s
       title = dedent title_s
 
-      if entry = current_entry( header )
+      if header[:merge].nil? and entry = current_entry( header )
         entry << title
       end
     end
@@ -178,6 +177,8 @@ BEGIN {
         next if line.empty?
         name, value = line.split(/:\s+/,2)
         case name
+        when "Merge"
+          header[:merge] = value
         when "Commit"
           header[:author_name], header[:email] = parse_author value
         when "CommitDate"
@@ -207,9 +208,11 @@ BEGIN {
 
   class Git
     def log( branch )
-      l = `git log --pretty=fuller --decorate=full refs/heads/#{branch}` 
+      l = `git log --encoding=utf-8 --pretty=fuller --decorate=full refs/heads/#{branch}`
       exit 1 unless $?.success?
-      l
+
+      # Sort out the encoding of the changelog.  Pesky Mac users!
+      l.force_encoding("UTF-8").encode("UTF-8",:invalid => :replace)
     end
   end # class Git
 
