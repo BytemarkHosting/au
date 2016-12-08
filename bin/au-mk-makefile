@@ -80,8 +80,8 @@ $(BUILD_ROOT)/$(APP_GEM_HOME): $(BUILD_ROOT)/$(APP_SOURCE) bundler
 
 $(BUILD_ROOT)/$(APP_HOME)/activate: $(BUILD_ROOT)/$(APP_SOURCE)
 	echo export GEM_HOME=/${APP_GEM_HOME} > $@
-	echo export GEM_PATH=/${APP_GEM_HOME}:\`gem environment gempath\` >> $@
-	echo export PATH=/${APP_GEM_HOME}/.bin:\$$PATH >> $@
+	echo export GEM_PATH=/${APP_GEM_HOME}:\\`gem environment gempath\\` >> $@
+	echo export PATH=/${APP_GEM_HOME}/bin:\\$$PATH >> $@
 
 activate: $(BUILD_ROOT)/$(APP_HOME)/activate
 
