@@ -13,7 +13,7 @@ stages:
     paths:
       - pkg/
 
-package:jessie: &package
+package:jessie:
   <<: *package
 
 package:stretch:
