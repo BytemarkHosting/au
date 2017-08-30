@@ -1,0 +1,34 @@
+stages:
+  - package
+  - publish
+
+.package: &package
+  image: $CI_REGISTRY/docker-images/layers:$DISTRO-deb
+  stage: package
+  variables:
+    DISTRO: jessie
+  script:
+    - package
+  artifacts:
+    paths:
+      - pkg/
+
+package:jessie: &package
+  <<: *package
+
+package:stretch:
+  <<: *package
+  variables:
+    DISTRO: stretch
+
+package:wheezy:
+  <<: *package
+  variables:
+    DISTRO: wheezy
+
+publish:
+  image: $CI_REGISTRY/docker-images/layers:jessie-publish
+  stage: publish
+  script:
+    - publish
+
